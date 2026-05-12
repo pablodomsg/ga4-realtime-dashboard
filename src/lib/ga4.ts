@@ -77,6 +77,7 @@ export function getAnalyticsClient() {
 
   if (!analyticsClient) {
     analyticsClient = new BetaAnalyticsDataClient({
+      fallback: true,
       credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
         private_key: getGooglePrivateKey(),
