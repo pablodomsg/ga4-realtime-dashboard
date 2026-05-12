@@ -50,19 +50,29 @@ function getGooglePrivateKey() {
   }
 
   const trimmedKey = rawKey.trim();
-  const parsedKey =
-    trimmedKey.startsWith('"') && trimmedKey.endsWith('"')
-      ? tryParseJsonString(trimmedKey)
-      : trimmedKey;
+  const parsedKey = parsePrivateKeyValue(trimmedKey);
 
   return parsedKey.replace(/\\n/g, "\n");
 }
 
-function tryParseJsonString(value: string) {
+function parsePrivateKeyValue(value: string) {
   try {
     const parsed = JSON.parse(value);
 
-    return typeof parsed === "string" ? parsed : value;
+    if (typeof parsed === "string") {
+      return parsed;
+    }
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "private_key" in parsed &&
+      typeof parsed.private_key === "string"
+    ) {
+      return parsed.private_key;
+    }
+
+    return value;
   } catch {
     return value;
   }
