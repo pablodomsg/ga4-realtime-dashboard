@@ -54,10 +54,8 @@ export async function analyticsResponse(name: HandlerName, request?: Request) {
 
     return NextResponse.json(successPayload(data), { headers });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "No se pudo obtener datos de Google Analytics.";
+    const message = getAnalyticsErrorMessage(error);
+    console.error("GA4 request failed", getSafeErrorLog(error));
 
     return NextResponse.json(
       {
@@ -68,6 +66,71 @@ export async function analyticsResponse(name: HandlerName, request?: Request) {
       { status: 500, headers },
     );
   }
+}
+
+function getAnalyticsErrorMessage(error: unknown) {
+  const parts = extractErrorParts(error).filter(Boolean);
+  const message = parts.find(
+    (part) => part && !part.includes("undefined undefined: undefined"),
+  );
+
+  if (message?.includes("PERMISSION_DENIED") || hasErrorCode(error, 7)) {
+    return "GA4 ha rechazado la peticion por permisos. Anade GOOGLE_CLIENT_EMAIL como Lector/Viewer en la propiedad GA4 y verifica que GA_PROPERTY_ID sea correcto.";
+  }
+
+  if (message?.includes("API has not been used") || message?.includes("SERVICE_DISABLED")) {
+    return "Google Analytics Data API no esta habilitada en el proyecto de Google Cloud de la service account.";
+  }
+
+  if (
+    message?.includes("DECODER routines") ||
+    message?.includes("PEM") ||
+    message?.includes("private key")
+  ) {
+    return "GOOGLE_PRIVATE_KEY no tiene un formato valido. Copia el valor private_key completo del JSON nuevo, sin cambiar BEGIN/END ni los saltos de linea.";
+  }
+
+  return message ?? "No se pudo obtener datos de Google Analytics. Revisa permisos de GA4, GA_PROPERTY_ID y que Google Analytics Data API este habilitada.";
+}
+
+function extractErrorParts(error: unknown): string[] {
+  if (!error || typeof error !== "object") {
+    return [String(error)];
+  }
+
+  const record = error as Record<string, unknown>;
+  const response = record.response as Record<string, unknown> | undefined;
+  const responseData = response?.data as Record<string, unknown> | undefined;
+  const responseError = responseData?.error as Record<string, unknown> | undefined;
+
+  return [
+    typeof record.details === "string" ? record.details : undefined,
+    typeof record.message === "string" ? record.message : undefined,
+    typeof responseError?.message === "string" ? responseError.message : undefined,
+    typeof responseData?.error_description === "string"
+      ? responseData.error_description
+      : undefined,
+    typeof record.code === "number" ? `code ${record.code}` : undefined,
+  ].filter((part): part is string => Boolean(part));
+}
+
+function hasErrorCode(error: unknown, code: number) {
+  return Boolean(error && typeof error === "object" && (error as { code?: unknown }).code === code);
+}
+
+function getSafeErrorLog(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return { error: String(error) };
+  }
+
+  const record = error as Record<string, unknown>;
+
+  return {
+    name: record.name,
+    code: record.code,
+    details: record.details,
+    message: record.message,
+  };
 }
 
 function getData(name: HandlerName, range: ReturnType<typeof parseRange>) {

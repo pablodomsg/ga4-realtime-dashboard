@@ -42,6 +42,32 @@ export function getGa4PropertyName() {
   return `properties/${propertyId}`;
 }
 
+function getGooglePrivateKey() {
+  const rawKey = process.env.GOOGLE_PRIVATE_KEY;
+
+  if (!rawKey) {
+    return undefined;
+  }
+
+  const trimmedKey = rawKey.trim();
+  const parsedKey =
+    trimmedKey.startsWith('"') && trimmedKey.endsWith('"')
+      ? tryParseJsonString(trimmedKey)
+      : trimmedKey;
+
+  return parsedKey.replace(/\\n/g, "\n");
+}
+
+function tryParseJsonString(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+
+    return typeof parsed === "string" ? parsed : value;
+  } catch {
+    return value;
+  }
+}
+
 export function getAnalyticsClient() {
   const status = getGa4ConfigStatus();
 
@@ -53,7 +79,7 @@ export function getAnalyticsClient() {
     analyticsClient = new BetaAnalyticsDataClient({
       credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+        private_key: getGooglePrivateKey(),
       },
     });
   }
